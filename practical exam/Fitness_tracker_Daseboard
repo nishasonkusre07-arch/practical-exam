@@ -1,0 +1,379 @@
+import os
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+
+class FitnessTracker:
+    COLUMNS = [
+        "Datetime",
+        "Activity Type",
+        "Duration (Minutes)",
+        "Calories Burned"
+    ]
+
+    ACTIVITY_TYPES = {
+        "Running", "Walking", "Cycling", "Yoga", "Gym",
+        "Swimming", "HIIT", "Strength Training", "Stretching"
+    }
+
+    def __init__(self, filename="fitness_activities.csv"):
+        self.filename = filename
+        self.df = self.load_csv()
+
+    def load_csv(self):
+        if not os.path.exists(self.filename):
+            df = pd.DataFrame(columns=self.COLUMNS)
+            df.to_csv(self.filename, index=False)
+            print(f"Created new CSV file: {self.filename}")
+            return df
+
+        try:
+            df = pd.read_csv(self.filename)
+
+            missing = set(self.COLUMNS) - set(df.columns)
+            if missing:
+                print("Missing columns:", ", ".join(missing))
+                return pd.DataFrame(columns=self.COLUMNS)
+
+            df = df[self.COLUMNS].copy()
+            df["Datetime"] = pd.to_datetime(df["Datetime"], errors="coerce")
+            df["Duration (Minutes)"] = pd.to_numeric(
+                df["Duration (Minutes)"], errors="coerce"
+            )
+            df["Calories Burned"] = pd.to_numeric(
+                df["Calories Burned"], errors="coerce"
+            )
+            df["Activity Type"] = (
+                df["Activity Type"].astype(str).str.strip().str.title()
+            )
+
+            df = df.dropna(subset=self.COLUMNS)
+            df = df[
+                df["Activity Type"].isin(self.ACTIVITY_TYPES)
+                & (df["Duration (Minutes)"] > 0)
+                & (df["Calories Burned"] > 0)
+            ]
+            return df.reset_index(drop=True)
+
+        except Exception as e:
+            print("Error reading CSV:", e)
+            return pd.DataFrame(columns=self.COLUMNS)
+
+    def save_csv(self):
+        """Save current DataFrame to CSV."""
+        data = self.df.copy()
+
+        if not data.empty:
+            data["Datetime"] = pd.to_datetime(
+                data["Datetime"]
+            ).dt.strftime("%Y-%m-%d")
+
+        data.to_csv(self.filename, index=False)
+        print(f"Data saved to {self.filename}")
+
+    def has_data(self):
+        if self.df.empty:
+            print("\nNo data found in CSV file.")
+            return False
+        return True
+
+    def add_activity(self):
+        print("\n========== ADD ACTIVITY ==========")
+
+        date = input("Enter date (YYYY-MM-DD): ").strip()
+
+        try:
+            date = pd.to_datetime(date, format="%Y-%m-%d")
+        except ValueError:
+            print("Invalid date. Use YYYY-MM-DD.")
+            return
+
+        activity = input("Enter activity type: ").strip().title()
+
+        if activity not in self.ACTIVITY_TYPES:
+            print(
+                "Invalid activity. Choose from: "
+                + ", ".join(sorted(self.ACTIVITY_TYPES))
+            )
+            return
+
+        try:
+            duration = float(input("Enter duration (minutes): "))
+            calories = float(input("Enter calories burned: "))
+
+            if duration <= 0 or calories <= 0:
+                raise ValueError
+
+        except ValueError:
+            print("Duration and calories must be positive numbers.")
+            return
+
+        new_row = pd.DataFrame([{
+            "Datetime": date,
+            "Activity Type": activity,
+            "Duration (Minutes)": duration,
+            "Calories Burned": calories
+        }])
+
+        self.df = pd.concat(
+            [self.df, new_row],
+            ignore_index=True
+        )
+
+        self.save_csv()
+        print("Activity added successfully!")
+
+    def view_data(self):
+        if not self.has_data():
+            return
+
+        data = self.df.sort_values("Datetime").copy()
+        data["Datetime"] = data["Datetime"].dt.strftime("%Y-%m-%d")
+
+        print("\n========== ALL ACTIVITIES ==========")
+        print(data.to_string(index=False))
+
+    def total_calories(self):
+        if not self.has_data():
+            return
+
+        total = self.df["Calories Burned"].sum()
+        print(f"\nTotal Calories Burned: {total:.2f}")
+
+    def average_duration(self):
+        if not self.has_data():
+            return
+
+        avg = self.df["Duration (Minutes)"].mean()
+        print(f"\nAverage Duration: {avg:.2f} minutes")
+
+    def activity_frequency(self):
+        if not self.has_data():
+            return
+
+        print("\n========== ACTIVITY FREQUENCY ==========")
+        print(self.df["Activity Type"].value_counts().to_string())
+
+    def numpy_analysis(self):
+        if not self.has_data():
+            return
+
+        calories = self.df["Calories Burned"].to_numpy()
+        duration = self.df["Duration (Minutes)"].to_numpy()
+
+        print("\n========== NUMPY ANALYSIS ==========")
+        print(f"Average Calories : {np.mean(calories):.2f}")
+        print(f"Maximum Calories : {np.max(calories):.2f}")
+        print(f"Minimum Calories : {np.min(calories):.2f}")
+        print(f"Total Calories   : {np.sum(calories):.2f}")
+        print(f"Average Duration : {np.mean(duration):.2f} minutes")
+        print(f"Maximum Duration : {np.max(duration):.2f} minutes")
+        print(f"Minimum Duration : {np.min(duration):.2f} minutes")
+
+    def weekly_report(self):
+        if not self.has_data():
+            return
+
+        data = self.df.copy()
+        data["Week"] = data["Datetime"].dt.isocalendar().week
+
+        report = data.groupby("Week")[
+            ["Duration (Minutes)", "Calories Burned"]
+        ].sum()
+
+        print("\n========== WEEKLY REPORT ==========")
+        print(report.to_string())
+
+    def filter_activity(self):
+        if not self.has_data():
+            return
+
+        activity = input("Enter activity type: ").strip().title()
+
+        result = self.df[
+            self.df["Activity Type"] == activity
+        ]
+
+        if result.empty:
+            print(f"No records found for {activity}.")
+            return
+
+        print(f"\n========== {activity.upper()} ==========")
+        print(result.to_string(index=False))
+
+    def fitness_report(self):
+        if not self.has_data():
+            return
+
+        most_common = self.df["Activity Type"].mode().iloc[0]
+
+        print("\n========== FITNESS REPORT ==========")
+        print(f"Total Activities : {len(self.df)}")
+        print(
+            f"Total Duration   : "
+            f"{self.df['Duration (Minutes)'].sum():.2f} minutes"
+        )
+        print(
+            f"Total Calories   : "
+            f"{self.df['Calories Burned'].sum():.2f}"
+        )
+        print(
+            f"Average Calories : "
+            f"{self.df['Calories Burned'].mean():.2f}"
+        )
+        print(f"Most Common      : {most_common}")
+
+    def charts_menu(self):
+        if not self.has_data():
+            return
+
+        while True:
+            print("\n========== CHARTS ==========")
+            print("1. Bar Chart")
+            print("2. Line Chart")
+            print("3. Pie Chart")
+            print("4. Heatmap")
+            print("5. Back")
+
+            choice = input("Enter choice: ").strip()
+
+            if choice == "1":
+                self.bar_chart()
+            elif choice == "2":
+                self.line_chart()
+            elif choice == "3":
+                self.pie_chart()
+            elif choice == "4":
+                self.heatmap()
+            elif choice == "5":
+                break
+            else:
+                print("Invalid choice.")
+
+    def bar_chart(self):
+        data = self.df.groupby(
+            "Activity Type"
+        )["Duration (Minutes)"].sum()
+
+        data.plot(kind="bar", figsize=(10, 5))
+        plt.title("Total Duration by Activity")
+        plt.xlabel("Activity Type")
+        plt.ylabel("Duration (Minutes)")
+        plt.xticks(rotation=45)
+        plt.tight_layout()
+        plt.show()
+
+    def line_chart(self):
+        data = self.df.sort_values("Datetime")
+
+        sns.lineplot(
+            data=data,
+            x="Datetime",
+            y="Calories Burned",
+            marker="o"
+        )
+
+        plt.title("Calories Burned Over Time")
+        plt.xlabel("Date")
+        plt.ylabel("Calories")
+        plt.xticks(rotation=45)
+        plt.tight_layout()
+        plt.show()
+
+    def pie_chart(self):
+        data = self.df.groupby(
+            "Activity Type"
+        )["Calories Burned"].sum()
+
+        plt.figure(figsize=(8, 8))
+        plt.pie(
+            data,
+            labels=data.index,
+            autopct="%1.1f%%",
+            startangle=90
+        )
+
+        plt.title("Calories Burned by Activity")
+        plt.tight_layout()
+        plt.show()
+
+    def heatmap(self):
+        data = self.df.copy()
+        data["Date"] = data["Datetime"].dt.strftime("%Y-%m-%d")
+
+        matrix = data.pivot_table(
+            index="Activity Type",
+            columns="Date",
+            values="Calories Burned",
+            aggfunc="sum",
+            fill_value=0
+        )
+
+        plt.figure(figsize=(14, 7))
+        sns.heatmap(
+            matrix,
+            annot=True,
+            fmt=".0f",
+            cmap="coolwarm"
+        )
+
+        plt.title("Calories Burned Heatmap")
+        plt.xlabel("Date")
+        plt.ylabel("Activity")
+        plt.tight_layout()
+        plt.show()
+
+
+def main():
+    tracker = FitnessTracker("Fitness_activities.csv")
+
+    while True:
+        print("\n====================================")
+        print("       FITNESS TRACKER SYSTEM")
+        print("====================================")
+        print("1. View Activities")
+        print("2. Add Activity")
+        print("3. Total Calories")
+        print("4. Average Duration")
+        print("5. Activity Frequency")
+        print("6. NumPy Analysis")
+        print("7. Weekly Report")
+        print("8. Filter Activity")
+        print("9. Fitness Report")
+        print("10. Show Charts")
+        print("11. Exit")
+        print("====================================")
+
+        choice = input("Enter your choice: ").strip()
+
+        if choice == "1":
+            tracker.view_data()
+        elif choice == "2":
+            tracker.add_activity()
+        elif choice == "3":
+            tracker.total_calories()
+        elif choice == "4":
+            tracker.average_duration()
+        elif choice == "5":
+            tracker.activity_frequency()
+        elif choice == "6":
+            tracker.numpy_analysis()
+        elif choice == "7":
+            tracker.weekly_report()
+        elif choice == "8":
+            tracker.filter_activity()
+        elif choice == "9":
+            tracker.fitness_report()
+        elif choice == "10":
+            tracker.charts_menu()
+        elif choice == "11":
+            print("\nThank you for using Fitness Tracker!")
+            break
+        else:
+            print("Invalid choice. Please try again.")
+
+
+if __name__ == "__main__":
+    main()
